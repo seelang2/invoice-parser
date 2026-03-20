@@ -1,35 +1,16 @@
 import express from "express";
-import multer from "multer"
+import multer from "multer";
+import path, { dirname } from 'path';
+import { fileURLToPath } from 'url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express()
-const upload = multer({ dest: 'uploads/'}) // ./uploads is based on dir that server was launched from
+const upload = multer({ dest: path.join(__dirname, 'uploads/')}) 
 
-app.get('/', (req, res) => {
-    res.send(`<!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title></title>
-                <style type="text/css">
-                body {
-                    background: #242020;
-                    color: #fff;
-                    font-size: 16px;
-                    font-family: Verdana;
-                }
-                </style>
-            </head>
-            <body>
-            <h1>Upload Test</h1>
-            <form action="/upload" method="post" enctype="multipart/form-data">
-            <input type="file" name="testing" />
-            <input type="submit" />
-            </form>
-            </body>
-            </html>`)
-})
+app.use(express.static(path.join(__dirname, 'public')));
+
 
 app.post('/upload', upload.single('testing'), (req, res, next) => {
     // req.file is the `testing` file
