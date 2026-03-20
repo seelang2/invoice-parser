@@ -1,0 +1,29 @@
+{
+  "name": "@invoice-parser/backend",
+  "version": "1.0.0",
+  "description": "Web application that extracts structured data from invoice images/PDFs",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Chris Langtiw",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.3.5",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@types/express": "^5.0.6",
+    "ajv": "^8.18.0",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "multer": "^2.1.1",
+    "pdf-parse": "^2.4.5",
+    "sharp": "^0.34.5"
+  }
+}
