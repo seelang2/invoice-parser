@@ -5,6 +5,7 @@ import multer, { type Multer } from "multer";
 import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import util from 'node:util'
+import { extractDataFromImage } from "../services/VisionExtractor.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -22,7 +23,29 @@ async function uploadHandler(req: Request, res: Response, next: NextFunction) {
     // Receive upload, hand off data to appropriate service(s), and create response
     try {
         // Let's try dumping the value of res to screen
-        res.send(`<body style="background:#242020;color:#fff;font-size:16px"><pre>${util.format('%o', res)}</pre></body>`)
+        // res.send(`<body style="background:#242020;color:#fff;font-size:16px"><pre>${util.format('%o', res)}</pre></body>`)
+        // Send ok, now send to vision API
+        if (!req.file) {
+            res.send('No file found.')
+        } else {
+            // const result = test(req.file)
+            // if (!result) {
+            //     res.send('Test failed.')
+            // }
+            const parseData = {
+                file: req.file,
+                options: {
+                    extractLineItems: true,
+                    extractTax: true,
+                    validateTotals: true,
+                    confidenceThreshold: true
+                }
+            }   
+            const response = await extractDataFromImage(parseData)
+
+            res.send(`<body style="background:#242020;color:#fff;font-size:16px"><pre>${response}</pre></body>`)
+
+        }
     } catch (err) {
         next(err) // Pass all errors to error handler
     }
