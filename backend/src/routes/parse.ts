@@ -43,7 +43,12 @@ async function uploadHandler(req: Request, res: Response, next: NextFunction) {
             }   
             const response = await extractDataFromImage(parseData)
 
-            res.send(`<body style="background:#242020;color:#fff;font-size:16px"><pre>${response}</pre></body>`)
+            //res.send(`<body style="background:#242020;color:#fff;font-size:16px"><pre>${response}</pre></body>`)
+
+            // Output raw JSON
+            res
+                .appendHeader('Content-Type', 'application/json')
+                .end(response)
 
         }
     } catch (err) {
