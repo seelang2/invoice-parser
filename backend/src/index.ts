@@ -11,6 +11,10 @@ const server = app.listen(config.PORT, () => {
 })
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  server.close(() => process.exit(0))
-})
+async function shutdown() {
+  server.close()
+  process.exit(0)
+}
+
+process.on('SIGTERM', shutdown)
+process.on('SIGINT', shutdown) // Ctrl-C in dev
