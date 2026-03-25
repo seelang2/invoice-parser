@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getBase64File } from "./FileProcessor.js";
 import 'dotenv/config'
+import { getSchema } from "./schema.js";
 
 // Most of these types aren't really needed
 type Token = {
@@ -137,81 +138,7 @@ Extract fields per the schema below. Apply normalization rules where specified:
 - Any additional notes or payment instructions
 
 `
-// TODO Add missing notes field to schema
-const invoiceSchema = {
-  type: "object",
-  required: ["vendor", "invoice", "totals"],
-  additionalProperties: false,
-  properties: {
-    vendor: {
-      type: "object",
-      required: ["name"],
-      properties: {
-        name: { type: "string" },
-        address: { type: ["string", "null"] },
-        phone: { type: ["string", "null"] },
-        email: { type: ["string", "null"], format: "email" },
-        taxId: { type: ["string", "null"] },
-        confidence: { type: "number" }
-      },
-      additionalProperties: false
-    },
-    invoice: {
-      type: "object",
-      required: ["number", "date"],
-      properties: {
-        number: { type: "string" },
-        date: { type: "string", format: "date" },
-        dueDate: { type: ["string", "null"], format: "date" },
-        poNumber: { type: ["string", "null"] },
-        confidence: { type: "number" }
-      },
-      additionalProperties: false
-    },
-    customer: {
-      type: "object",
-      required: ["name"],
-      properties: {
-        name: { type: "string" },
-        address: { type: ["string", "null"] },
-        phone: { type: ["string", "null"] },
-        email: { type: ["string", "null"], format: "email" },
-        confidence: { type: "number" }
-      },
-      additionalProperties: false
-    },
-    lineItems: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["description", "amount"],
-        properties: {
-          description: { type: "string" },
-          quantity: { type: ["number", "null"] },
-          unitPrice: { type: ["number", "null"] },
-          amount: { type: "number" },
-          confidence: { type: "number" }
-        },
-        additionalProperties: false
-      }
-    },
-    totals: {
-      type: "object",
-      required: ["total"],
-      properties: {
-        subtotal: { type: "number" },
-        taxRate: { type: ["number", "null"] },
-        taxAmount: { type: ["number", "null"] },
-        total: { type: "number" },
-        currency: { type: "string", pattern: "^[A-Z]{3}$" },
-        confidence: { type: "number" }
-      },
-      additionalProperties: false
-    }
-  }
-};
-
-
+const invoiceSchema = getSchema()
 
 export async function extractDataFromImage(parseData: ParseData) {
     // const anthropic = new Anthropic({
@@ -262,4 +189,28 @@ export async function extractDataFromImage(parseData: ParseData) {
     return message
 }
 
-
+/*
+Output returned on non-invoice image (face pic):
+{
+    "vendor": {
+        "name": "Unknown",
+        "address": null,
+        "phone": null,
+        "email": null,
+        "taxId": null,
+        "confidence": 0.05
+    },
+    "invoice": {
+        "number": "316",
+        "date": "2024-01-01",
+        "dueDate": null,
+        "poNumber": null,
+        "confidence": 0.1
+    },
+    "totals": {
+        "total": 0.43,
+        "currency": "USD",
+        "confidence": 0.1
+    }
+}
+*/

@@ -1,23 +1,54 @@
 import { str } from 'ajv'
-import type { ErrorRequestHandler } from 'express'
+import type { ErrorRequestHandler, Request, Response, NextFunction } from 'express'
 //import { ZodError } from 'zod'
 
-class AppError extends Error {
-  constructor(
-    public statusCode: number,
-    public code: string,
-    message: string
-  ) { super(message) }
+// Route 404 needs separate handler to prevent builtin route 404 handler
+export function notFoundHandler(req: Request, _res: Response, next: NextFunction) {
+  next(new NotFoundError(`Route ${req.method} ${req.path}`));
 }
 
-export class NotFoundError     extends AppError { constructor(m = 'Not found')     { super(404, 'NOT_FOUND', m) } }
-export class UnauthorizedError extends AppError { constructor(m = 'Unauthorized')  { super(401, 'UNAUTHORIZED', m) } }
-export class ForbiddenError    extends AppError { constructor(m = 'Forbidden')     { super(403, 'FORBIDDEN', m) } }
-export class ConflictError     extends AppError { constructor(m = 'Conflict')      { super(409, 'CONFLICT', m) } }
-export class ValidationError   extends AppError { constructor(m = 'Invalid input') { super(422, 'VALIDATION_ERROR', m) } }
+export class AppError extends Error {
+  public readonly statusCode: number;
+  public readonly code: string;
+  /** true = expected failure; false = bug — crash the process */
+  public readonly isOperational: boolean;
+  public readonly details?: unknown;
 
-export class ParseError        extends AppError { constructor(m = 'Parsing Error')     { super(400, 'PARSE_ERROR', m) } }
+  constructor(
+    message: string,
+    statusCode: number,
+    code: string,
+    options: { isOperational?: boolean; details?: unknown; cause?: unknown } = {}
+  ) {
+    super(message, { cause: options.cause });
+    this.statusCode = statusCode;
+    this.code = code;
+    this.isOperational = options.isOperational ?? true;
+    this.details = options.details;
+    // Fix prototype chain — required when extending built-ins in TS
+    Object.setPrototypeOf(this, new.target.prototype);
+    Error.captureStackTrace(this, this.constructor);
+  }
 
+  className() { return this.constructor.name }
+}
+
+
+// 400 — client sent bad data
+export class ValidationError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super(message, 400, 'VALIDATION_ERROR', { details });
+  }
+}
+
+// 404 — resource not found
+export class NotFoundError extends AppError {
+  constructor(resource = 'Resource') {
+    super(`${resource} not found`, 404, 'NOT_FOUND');
+  }
+}
+
+// 422 - Unprocessable Content: Not an invoice
 /*
 {
   "success": false,
@@ -25,10 +56,154 @@ export class ParseError        extends AppError { constructor(m = 'Parsing Error
   "message": "Image does not appear to contain an invoice"
 }
 */
+export class NotInvoiceError extends AppError {
+  constructor(message = 'Image does not appear to contain an invoice') {
+    super(message, 422, 'NOT_AN_INVOICE')
+  }
+}
+
+// 422 - Unprocessable Content : Low confidence
+/*
+{
+  "success": false,
+  "error": "LOW_CONFIDENCE",
+  "confidence": 0.45,  // Below threshold
+  "message": "Image quality too low for reliable extraction",
+  "suggestions": ["Upload a higher resolution image", "Ensure good lighting"]
+}
+*/
+export class LowConfidenceError extends AppError {
+  constructor(message: string, details?: unknown) {
+    // const out = {...stuff as object, ...{param1: 'extra', param2: 'properties'}}
+    const allDetails = { ...details as object, ...{ suggestions: ["Upload a higher resolution image", "Ensure good lighting"], ...{} } }
+    super(`Image quality too low for reliable extraction`, 422, 'LOW_CONFIDENCE', allDetails as any)
+  }
+}
+
+// 422 - Unprocessable Content: Multiple invoices in image
+/*
+{
+  "success": false,
+  "error": "MULTIPLE_INVOICES_DETECTED",
+  "message": "Please upload one invoice per image",
+  "invoicesDetected": 2
+}
+*/
+export class MultipleInvoicesError extends AppError {
+  constructor(message = "Please upload one invoice per image.", details?: unknown) {
+    super(message, 422, 'MULTIPLE_INVOICES_DETECTED', details || {})
+  }
+}
+
+// 503 Service Unavailable: API timeout (non-fatal)
+export class ServiceUnavailableError extends AppError {
+  constructor(message = 'The requested service is temporarily unavailable.') {
+    super(message, 503, 'SERVICE_UNAVAILABLE');
+  }
+}
+
+
+export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+  // Headers already sent — can't write a new response
+  if (res.headersSent) {
+    // logger.warn({ err }, 'Error after headers sent');
+    console.log(err, 'Error after headers sent')
+    return;
+  }
+
+  let appErr: AppError;
+
+  if (err instanceof AppError) {
+    console.log(`AppError: ${err.className()}`)
+    appErr = err;
+  } else if (err.requestID && err.error) {
+    console.log('Anthropic API error wrapper')
+    // Anthropic API error wrapper
+    appErr = new AppError(
+      'An unexpected error occurred', 500, 'INTERNAL_ERROR', 
+      { 
+        isOperational: false,
+        details: { source: 'Anthropic API', requestID: err.requestID, status: err.status, type: err.error.error.type },
+        cause: err.error.error.message
+      }
+    );
+  } else if (err instanceof Error) {
+    console.log('Unknown error from a third-party lib')
+    // Unknown error from a third-party lib — treat as 500
+    appErr = new AppError(
+      'An unexpected error occurred', 500, 'INTERNAL_ERROR',
+      { isOperational: false, cause: err }
+    );
+  } else {
+    console.log('Other error')
+    // Thrown non-Error (e.g. throw 'oops') — always a bug
+    appErr = new AppError(
+      'An unexpected error occurred', 500, 'INTERNAL_ERROR',
+      { isOperational: false }
+    );
+  }
+
+  // Logging - just using console.log for this app; use actual logger like Pino
+  const logPayload = {
+    err: appErr,
+    // requestId: ctx?.requestId,
+    method: req.method,
+    path: req.path,
+    statusCode: appErr.statusCode,
+    code: appErr.code,
+    details: appErr.details
+  };
+
+  if (appErr.statusCode >= 500) {
+    // logger.error(logPayload, appErr.message);
+    console.error(logPayload, appErr.message)
+  } else if (appErr.statusCode >= 400) {
+    // logger.warn(logPayload, appErr.message);
+    console.log(logPayload, appErr.message)
+  }
+
+  const isProd = process.env.NODE_ENV === 'production';
+
+  // Apps should adopt RFC 9457 for error responses
+  // Spec for this project has custom JSON response so we adhere to it (mostly, but standardized)
+  res.status(appErr.statusCode).json({
+    requestId: res.locals.requestId,
+    success: false,
+    error: appErr.code,
+    message: appErr.message,
+    details: isProd && !appErr.isOperational ? undefined : appErr.details
+  })
+
+  // Non-operational errors should stop the app
+  if (!appErr.isOperational) {
+    // Give the response time to flush, then exit
+    setImmediate(() => {
+      // logger.fatal({ err: appErr }, 'Programmer error — shutting down');
+      console.log({ err: appErr }, 'Programmer error — shutting down')
+      process.emit('SIGTERM'); // Initiate graceful shutdown
+    });
+  }
+
+  /*
+  res.status(appErr.statusCode).json({
+    type:     `https://errors.yourdomain.com/${appErr.code.toLowerCase()}`,
+    title:    appErr.message,
+    status:   appErr.statusCode,
+    detail:   appErr.isOperational && !isProd ? appErr.message : undefined,
+    instance: req.path,
+    code:     appErr.code,
+    requestId: res.locals.requestId,
+    // Only expose structured details for operational errors (never for 5xx bugs)
+    ...(appErr.isOperational && appErr.details
+      ? { errors: appErr.details }
+      : {}),
+  });
+  */
+
+}
 
 /*
-
-Anthropic Error (JSON) message
+Anthropic Error (JSON) message:
 {
     "status": 400,
     "headers": {},
@@ -43,45 +218,3 @@ Anthropic Error (JSON) message
     }
 }
 */
-
-
-
-export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
-
-    // console.dir(err)
-
-//   if (err instanceof ZodError) {
-//     return res.status(422).json({
-//       code:   'VALIDATION_ERROR',
-//       errors: err.flatten()
-//     })
-//   }
-  if (err instanceof AppError) {
-    console.log('AppError occurred:', err.statusCode, err.code, err.message)
-    return res.status(err.statusCode).json({
-      code:    err.code,
-      message: err.message
-    })
-  }
-
-  // Anthropic API error
-  if (err.requestID && err.error) {
-    console.log({requestID: err.requestID, status: err.status, type: err.error.error.type, message: err.error.error.message})
-
-    return res.status(err.status).json({
-        "success": false,
-        "error": err.error.error.type,
-        "message": err.error.error.message
-    })
-
-  }
-    
-  //logger.error({ err, requestId: req.id }, 'Unhandled error')
-  console.log('Unhandled error:')
-  console.dir(err)
-  res.status(500).json({
-    success: false,
-    error: "INTERNAL_ERROR",
-    message: "An internal error occurred. Please try again later."
-    })
-}
