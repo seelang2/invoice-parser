@@ -65,6 +65,25 @@ Any character outside of the JSON object will cause a fatal error.
 Your response MUST start with { and end with }. 
 No backticks. No \`\`\`json. No commentary before or after.
 `
+/*
+NOTE: Inconsistency issues
+The prompt template and schema as presented in the project specifications conflict 
+with each other. The JSON structure in the prompt doesn't match the schema. Likewise,
+the prompt indicates to add a confidence score to each major section, but the field 
+is only present in the vendor object in the schema.
+
+Resolution actions:
+Explicitly added confidence as field to extract in each section in both prompt and schema
+Ensured fields indicated in prompt match schema
+Added customer property to schema
+Removed the JSON structure specified in the prompt
+Added output_format to the messages.create input
+
+Additional required modifications:
+Per SDK:
+Added additionalProperties: false to each object in schema
+
+*/
 
 const extractionPrompt = `
 Extract the requested fields from the attached image. Follow these rules exactly:
@@ -101,41 +120,95 @@ Extract fields per the schema below. Apply normalization rules where specified:
 4. LINE ITEMS (each line item should include):
 - Description
 - Quantity
-- Unit of measure
 - Unit price
 - Line total
 - Confidence
 
 5. TOTALS:
 - Subtotal (sum of line items)
-- Tax
+- Tax rate
+- Tax amount
 - Total (sum of subtotal and tax)
+- Currency
 - Confidence
 
-6. PAYMENT TERMS:
-- Terms (e.g. "Net 30", "Due on Receipt")
-
-7. NOTES:
+6. NOTES:
 - Any additional notes or payment instructions
 
-Return in this exact JSON structure:
-{
-	"extractedData": {
-	"vendor": { "name": string, "address": string, ... },
-	"invoice": { "number": string, "date": string, ... },
-	"lineItems": [ { "description": string, ... } ],
-	"totals": { "subtotal": number, ... }
-	},
-	"validation": {
-		"mathchecks": {
-			"lineItemsMatchSubtotal": boolean,
-			"taxCalculationCorrect": boolean,
-			"totalCalculationCorrect": boolean
-		}
-	}
-}
-
 `
+
+const invoiceSchema = {
+  type: "object",
+  required: ["vendor", "invoice", "totals"],
+  properties: {
+    vendor: {
+      type: "object",
+      required: ["name"],
+      properties: {
+        name: { type: "string", minLength: 1 },
+        address: { type: ["string", "null"] },
+        phone: { type: ["string", "null"] },
+        email: { type: ["string", "null"], format: "email" },
+        taxId: { type: ["string", "null"] },
+        confidence: { type: "number", minimum: 0, maximum: 1 },
+        additionalProperties: false
+      }
+    },
+    invoice: {
+      type: "object",
+      required: ["number", "date"],
+      properties: {
+        number: { type: "string", minLength: 1 },
+        date: { type: "string", format: "date" },
+        dueDate: { type: ["string", "null"], format: "date" },
+        poNumber: { type: ["string", "null"] },
+        confidence: { type: "number", minimum: 0, maximum: 1 },
+        additionalProperties: false
+      }
+    },
+    customer: {
+      type: "object",
+      required: ["name"],
+      properties: {
+        name: { type: "string", minLength: 1 },
+        address: { type: ["string", "null"] },
+        phone: { type: ["string", "null"] },
+        email: { type: ["string", "null"], format: "email" },
+        confidence: { type: "number", minimum: 0, maximum: 1 },
+        additionalProperties: false
+      }
+    },
+    lineItems: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["description", "amount"],
+        properties: {
+          description: { type: "string" },
+          quantity: { type: ["number", "null"] },
+          unitPrice: { type: ["number", "null"] },
+          amount: { type: "number", minimum: 0 },
+          confidence: { type: "number", minimum: 0, maximum: 1 },
+          additionalProperties: false
+        }
+      }
+    },
+    totals: {
+      type: "object",
+      required: ["total"],
+      properties: {
+        subtotal: { type: "number", minimum: 0 },
+        taxRate: { type: ["number", "null"], minimum: 0, maximum: 1 },
+        taxAmount: { type: ["number", "null"], minimum: 0 },
+        total: { type: "number", minimum: 0 },
+        currency: { type: "string", pattern: "^[A-Z]{3}$" },
+        confidence: { type: "number", minimum: 0, maximum: 1 },
+        additionalProperties: false
+      }
+    }
+  }
+};
+
 
 
 export async function extractDataFromImage(parseData: ParseData): Promise<string | boolean | JSON> {
@@ -155,7 +228,7 @@ export async function extractDataFromImage(parseData: ParseData): Promise<string
     
     const message = await anthropic.messages.create({
         model: "claude-opus-4-6",
-        max_tokens: 1024,
+        max_tokens: 1536,
         messages: [
             {
                 role: "user",
@@ -175,10 +248,16 @@ export async function extractDataFromImage(parseData: ParseData): Promise<string
                 ]
             }
         ],
-        system: systemPrompt
-    });
+        system: systemPrompt,
+        output_config: {
+            format: {
+                type: "json_schema",
+                schema: invoiceSchema
+            }
+        }
+    })
   
-    console.log(message);
+    // console.log(message);
 
     // Temp for dev and testing
     const content = parseContent(message.content)

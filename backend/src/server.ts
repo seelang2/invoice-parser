@@ -5,8 +5,8 @@ import { fileURLToPath } from 'url';
 import helmet from 'helmet'
 import cors from 'cors'
 import { parseRouter } from "./routes/parse.js";
+import { errorHandler } from "./errors.js";
 
-import { str } from "ajv";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -23,3 +23,4 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/api/parse', parseRouter)
 
+app.use(errorHandler) // Error handlers go at end; first specific handlers, then catchall

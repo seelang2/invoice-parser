@@ -12,6 +12,7 @@ const server = app.listen(config.PORT, () => {
 
 // Graceful shutdown
 async function shutdown() {
+  console.log('Shutdown initiated...')
   server.close()
   process.exit(0)
 }

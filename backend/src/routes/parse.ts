@@ -6,6 +6,7 @@ import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import util from 'node:util'
 import { extractDataFromImage } from "../services/VisionExtractor.js";
+import type { ParseError } from "../errors.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,17 +22,14 @@ parseRouter.post('/', upload.single('uploaded-file'), uploadHandler)
 
 async function uploadHandler(req: Request, res: Response, next: NextFunction) {
     // Receive upload, hand off data to appropriate service(s), and create response
-    try {
+    // 
+    // try {
         // Let's try dumping the value of res to screen
         // res.send(`<body style="background:#242020;color:#fff;font-size:16px"><pre>${util.format('%o', res)}</pre></body>`)
         // Send ok, now send to vision API
         if (!req.file) {
             res.send('No file found.')
         } else {
-            // const result = test(req.file)
-            // if (!result) {
-            //     res.send('Test failed.')
-            // }
             const parseData = {
                 file: req.file,
                 options: {
@@ -44,15 +42,16 @@ async function uploadHandler(req: Request, res: Response, next: NextFunction) {
             const response = await extractDataFromImage(parseData)
 
             //res.send(`<body style="background:#242020;color:#fff;font-size:16px"><pre>${response}</pre></body>`)
-
-            // Output raw JSON
-            res
-                .appendHeader('Content-Type', 'application/json')
-                .end(response)
+            res.json(response)
 
         }
-    } catch (err) {
-        next(err) // Pass all errors to error handler
-    }
+    // } catch (err) {
+    //     console.log('parse:uploadHandler: Error trapped')
+    //     next(err) // Pass all errors to error handler
+    // }
 }
+
+
+
+
 
