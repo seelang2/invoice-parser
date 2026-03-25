@@ -81,7 +81,8 @@ Added output_format to the messages.create input
 
 Additional required modifications:
 Per SDK:
-Added additionalProperties: false to each object in schema
+Added additionalProperties: false to each object in schema (including root object)
+Removed unsupported constraints minimum, maximum, minLength, maxLength
 
 */
 
@@ -136,47 +137,48 @@ Extract fields per the schema below. Apply normalization rules where specified:
 - Any additional notes or payment instructions
 
 `
-
+// TODO Add missing notes field to schema
 const invoiceSchema = {
   type: "object",
   required: ["vendor", "invoice", "totals"],
+  additionalProperties: false,
   properties: {
     vendor: {
       type: "object",
       required: ["name"],
       properties: {
-        name: { type: "string", minLength: 1 },
+        name: { type: "string" },
         address: { type: ["string", "null"] },
         phone: { type: ["string", "null"] },
         email: { type: ["string", "null"], format: "email" },
         taxId: { type: ["string", "null"] },
-        confidence: { type: "number", minimum: 0, maximum: 1 },
-        additionalProperties: false
-      }
+        confidence: { type: "number" }
+      },
+      additionalProperties: false
     },
     invoice: {
       type: "object",
       required: ["number", "date"],
       properties: {
-        number: { type: "string", minLength: 1 },
+        number: { type: "string" },
         date: { type: "string", format: "date" },
         dueDate: { type: ["string", "null"], format: "date" },
         poNumber: { type: ["string", "null"] },
-        confidence: { type: "number", minimum: 0, maximum: 1 },
-        additionalProperties: false
-      }
+        confidence: { type: "number" }
+      },
+      additionalProperties: false
     },
     customer: {
       type: "object",
       required: ["name"],
       properties: {
-        name: { type: "string", minLength: 1 },
+        name: { type: "string" },
         address: { type: ["string", "null"] },
         phone: { type: ["string", "null"] },
         email: { type: ["string", "null"], format: "email" },
-        confidence: { type: "number", minimum: 0, maximum: 1 },
-        additionalProperties: false
-      }
+        confidence: { type: "number" }
+      },
+      additionalProperties: false
     },
     lineItems: {
       type: "array",
@@ -187,31 +189,31 @@ const invoiceSchema = {
           description: { type: "string" },
           quantity: { type: ["number", "null"] },
           unitPrice: { type: ["number", "null"] },
-          amount: { type: "number", minimum: 0 },
-          confidence: { type: "number", minimum: 0, maximum: 1 },
-          additionalProperties: false
-        }
+          amount: { type: "number" },
+          confidence: { type: "number" }
+        },
+        additionalProperties: false
       }
     },
     totals: {
       type: "object",
       required: ["total"],
       properties: {
-        subtotal: { type: "number", minimum: 0 },
-        taxRate: { type: ["number", "null"], minimum: 0, maximum: 1 },
-        taxAmount: { type: ["number", "null"], minimum: 0 },
-        total: { type: "number", minimum: 0 },
+        subtotal: { type: "number" },
+        taxRate: { type: ["number", "null"] },
+        taxAmount: { type: ["number", "null"] },
+        total: { type: "number" },
         currency: { type: "string", pattern: "^[A-Z]{3}$" },
-        confidence: { type: "number", minimum: 0, maximum: 1 },
-        additionalProperties: false
-      }
+        confidence: { type: "number" }
+      },
+      additionalProperties: false
     }
   }
 };
 
 
 
-export async function extractDataFromImage(parseData: ParseData): Promise<string | boolean | JSON> {
+export async function extractDataFromImage(parseData: ParseData) {
     // const anthropic = new Anthropic({
     //     apiKey: process.env.ANTHROPIC_API_KEY
     // });
@@ -257,21 +259,7 @@ export async function extractDataFromImage(parseData: ParseData): Promise<string
         }
     })
   
-    // console.log(message);
-
-    // Temp for dev and testing
-    const content = parseContent(message.content)
-
-    // Need to confirm data is JSON, and validates against scheme
-    // If it fails, we retry
-
-    return content
-}
-
-// TODO: Find more accurate type than any
-function parseContent(content: any[]): string {
-    let contentText = content.filter(block => block.type === 'text')
-    return contentText.pop()?.text || '(No text content in response)'
+    return message
 }
 
 

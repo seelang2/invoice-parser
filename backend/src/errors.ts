@@ -57,6 +57,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
 //     })
 //   }
   if (err instanceof AppError) {
+    console.log('AppError occurred:', err.statusCode, err.code, err.message)
     return res.status(err.statusCode).json({
       code:    err.code,
       message: err.message
