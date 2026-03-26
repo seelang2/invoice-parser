@@ -3,9 +3,15 @@
 // TODO Add missing notes field to schema
 const invoiceSchema = {
   type: "object",
-  required: ["vendor", "invoice", "totals"],
+  required: ["imageType", "vendor", "invoice", "totals"],
   additionalProperties: false,
   properties: {
+    imageType: { type: "string", enum: ["invoice", "unknown"]},
+    typeConfidence: { type: "number" },
+    errorCode: {
+      type: "string",
+      enum: ["NONE", "LOW_CONFIDENCE", "POOR_IMAGE_QUALITY", "NOT_AN_INVOICE", "MULTIPLE_INVOICES"]
+    },
     vendor: {
       type: "object",
       required: ["name"],
