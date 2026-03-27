@@ -7,6 +7,14 @@ export function notFoundHandler(req: Request, _res: Response, next: NextFunction
   next(new NotFoundError(`Route ${req.method} ${req.path}`));
 }
 
+type AppErrorOptions = {
+  isOperational?: boolean,
+  details?: unknown, 
+  cause?: unknown,
+  requestId?: unknown,
+  originalError?: unknown 
+}
+
 export class AppError extends Error {
   public readonly statusCode: number;
   public readonly code: string;
@@ -14,17 +22,22 @@ export class AppError extends Error {
   public readonly isOperational: boolean;
   public readonly details?: unknown;
 
+  public readonly requestId?: unknown;
+  public readonly originalError?: unknown;
+
   constructor(
     message: string,
     statusCode: number,
     code: string,
-    options: { isOperational?: boolean; details?: unknown; cause?: unknown } = {}
+    options: AppErrorOptions = {}
   ) {
     super(message, { cause: options.cause });
     this.statusCode = statusCode;
     this.code = code;
     this.isOperational = options.isOperational ?? true;
     this.details = options.details;
+    this.requestId = options.requestId;
+    this.originalError = options.originalError;
     // Fix prototype chain — required when extending built-ins in TS
     Object.setPrototypeOf(this, new.target.prototype);
     Error.captureStackTrace(this, this.constructor);
@@ -37,7 +50,7 @@ export class AppError extends Error {
 // 400 — client sent bad data
 export class ValidationError extends AppError {
   constructor(message: string, details?: unknown) {
-    super(message, 400, 'VALIDATION_ERROR', { details });
+    super(message, 400, 'VALIDATION_ERROR', { details: details });
   }
 }
 
@@ -76,7 +89,7 @@ export class LowConfidenceError extends AppError {
   constructor(message: string, details?: unknown) {
     // const out = {...stuff as object, ...{param1: 'extra', param2: 'properties'}}
     const allDetails = { ...details as object, ...{ suggestions: ["Upload a higher resolution image", "Ensure good lighting"], ...{} } }
-    super(`Image quality too low for reliable extraction`, 422, 'LOW_CONFIDENCE', allDetails as any)
+    super(`Image quality too low for reliable extraction`, 422, 'LOW_CONFIDENCE', { details: allDetails })
   }
 }
 
@@ -91,14 +104,14 @@ export class LowConfidenceError extends AppError {
 */
 export class MultipleInvoicesError extends AppError {
   constructor(message = "Please upload one invoice per image.", details?: unknown) {
-    super(message, 422, 'MULTIPLE_INVOICES_DETECTED', details || {})
+    super(message, 422, 'MULTIPLE_INVOICES_DETECTED', { details: details })
   }
 }
 
 // 503 Service Unavailable: API timeout (non-fatal)
 export class ServiceUnavailableError extends AppError {
-  constructor(message = 'The requested service is temporarily unavailable.') {
-    super(message, 503, 'SERVICE_UNAVAILABLE');
+  constructor(message = 'The requested service is temporarily unavailable.', options?: Partial<AppErrorOptions>) {
+    super(message, 503, 'SERVICE_UNAVAILABLE', options);
   }
 }
 
