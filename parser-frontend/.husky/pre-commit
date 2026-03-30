@@ -1,0 +1,2 @@
+cd parser-frontend
+pnpm exec lint-staged
