@@ -1,18 +1,10 @@
-import { str } from 'ajv'
 import type { ErrorRequestHandler, Request, Response, NextFunction } from 'express'
+import type { AppErrorOptions } from './types/types.js';
 //import { ZodError } from 'zod'
 
 // Route 404 needs separate handler to prevent builtin route 404 handler
 export function notFoundHandler(req: Request, _res: Response, next: NextFunction) {
   next(new NotFoundError(`Route ${req.method} ${req.path}`));
-}
-
-type AppErrorOptions = {
-  isOperational?: boolean,
-  details?: unknown, 
-  cause?: unknown,
-  requestId?: unknown,
-  originalError?: unknown 
 }
 
 export class AppError extends Error {
@@ -86,10 +78,18 @@ export class NotInvoiceError extends AppError {
 }
 */
 export class LowConfidenceError extends AppError {
-  constructor(message: string, details?: unknown) {
+  constructor(message: string = 'Confidence score is below acceptable threshold', details?: unknown) {
     // const out = {...stuff as object, ...{param1: 'extra', param2: 'properties'}}
     const allDetails = { ...details as object, ...{ suggestions: ["Upload a higher resolution image", "Ensure good lighting"], ...{} } }
-    super(`Image quality too low for reliable extraction`, 422, 'LOW_CONFIDENCE', { details: allDetails })
+    super(message, 422, 'LOW_CONFIDENCE', { details: allDetails })
+  }
+}
+
+export class PoorImageQualityError extends AppError {
+  constructor(message: string = 'Image quality too low for reliable extraction', details?: unknown) {
+    // const out = {...stuff as object, ...{param1: 'extra', param2: 'properties'}}
+    const allDetails = { ...details as object, ...{ suggestions: ["Upload a higher resolution image", "Ensure good lighting"], ...{} } }
+    super(message, 422, 'POOR_IMAGE_QUALITY', { details: allDetails })
   }
 }
 
@@ -120,17 +120,17 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   // Headers already sent — can't write a new response
   if (res.headersSent) {
     // logger.warn({ err }, 'Error after headers sent');
-    console.log(err, 'Error after headers sent')
+    console.error(JSON.stringify(err), 'Error after headers sent')
     return;
   }
 
   let appErr: AppError;
 
   if (err instanceof AppError) {
-    console.log(`AppError: ${err.className()}`)
+    // console.error(`AppError: ${err.className()}`)
     appErr = err;
   } else if (err.requestID && err.error) {
-    console.log('Anthropic API error wrapper')
+    // console.error('Anthropic API error wrapper')
     // Anthropic API error wrapper
     appErr = new AppError(
       'An unexpected error occurred', 500, 'INTERNAL_ERROR', 
@@ -141,14 +141,14 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
       }
     );
   } else if (err instanceof Error) {
-    console.log('Unknown error from a third-party lib')
+    // console.error('Unknown error from a third-party lib')
     // Unknown error from a third-party lib — treat as 500
     appErr = new AppError(
       'An unexpected error occurred', 500, 'INTERNAL_ERROR',
       { isOperational: false, cause: err }
     );
   } else {
-    console.log('Other error')
+    // console.error('Other error')
     // Thrown non-Error (e.g. throw 'oops') — always a bug
     appErr = new AppError(
       'An unexpected error occurred', 500, 'INTERNAL_ERROR',
@@ -159,20 +159,22 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   // Logging - just using console.log for this app; use actual logger like Pino
   const logPayload = {
     err: appErr,
-    // requestId: ctx?.requestId,
+    requestId: res.locals.requestId,
     method: req.method,
     path: req.path,
     statusCode: appErr.statusCode,
     code: appErr.code,
-    details: appErr.details
+    message: appErr.message,
+    details: appErr.details,
+    apiErr: { requestId: appErr.requestId, originalError: appErr.originalError }
   };
 
   if (appErr.statusCode >= 500) {
     // logger.error(logPayload, appErr.message);
-    console.error(logPayload, appErr.message)
+    console.error(JSON.stringify(logPayload))
   } else if (appErr.statusCode >= 400) {
     // logger.warn(logPayload, appErr.message);
-    console.log(logPayload, appErr.message)
+    console.log(JSON.stringify(logPayload))
   }
 
   const isProd = process.env.NODE_ENV === 'production';
@@ -192,7 +194,7 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
     // Give the response time to flush, then exit
     setImmediate(() => {
       // logger.fatal({ err: appErr }, 'Programmer error — shutting down');
-      console.log({ err: appErr }, 'Programmer error — shutting down')
+      console.log(JSON.stringify({ err: appErr }), 'Programmer error — shutting down')
       process.emit('SIGTERM'); // Initiate graceful shutdown
     });
   }

@@ -3,9 +3,21 @@ import Anthropic from "@anthropic-ai/sdk";
 import "dotenv/config";
 import { getSchema } from "./schema.js";
 import { exit } from "node:process";
-import type { AnthropicError, AnthropicRetryOptions, MediaType } from "../types/types.js";
-import { NotFoundError, ServiceUnavailableError } from "../errors.js";
-
+import type {
+  AnthropicError,
+  AnthropicRetryOptions,
+  Invoice,
+  MediaType,
+} from "../types/types.js";
+import {
+  AppError,
+  LowConfidenceError,
+  MultipleInvoicesError,
+  NotFoundError,
+  NotInvoiceError,
+  PoorImageQualityError,
+  ServiceUnavailableError,
+} from "../errors.js";
 
 const systemPrompt = `
 You are a JSON extraction API. Your output is piped directly into JSON.parse(). 
@@ -104,10 +116,12 @@ Extract the requested fields from the attached image. Follow these rules exactly
 </instructions>
 `;
 
-// const invoiceSchema = getSchema();
-
-export async function extractDataFromImage(imageData: string, mediaType: MediaType ): Promise<string> {
-//   if (!imageData) throw new NotFoundError("Uploaded image");
+export async function extractDataFromImage(
+  imageData: string,
+  mediaType: MediaType,
+  confidenceThreshold: number,
+): Promise<Invoice> {
+  //   if (!imageData) throw new NotFoundError("Uploaded image");
 
   // Build call params
   // Anthropic.Messages.MessageCreateParamsNonStreaming
@@ -143,16 +157,75 @@ export async function extractDataFromImage(imageData: string, mediaType: MediaTy
       },
     };
 
-  // make API call
   const response = await callAnthropicApi(messageCreateParams);
-
-  console.log(response)
 
   // could check here for refusal
 
-  const content = parseTextContent(response.content);
+  const invoice = JSON.parse(parseTextContent(response.content));
 
-  return JSON.stringify(JSON.parse(content));
+  checkErrorCode(invoice, confidenceThreshold);
+  return invoice;
+}
+
+function checkErrorCode(invoice: Invoice, confidenceThreshold: number) {
+  switch (invoice.errorCode) {
+    case "LOW_CONFIDENCE":
+      throw new LowConfidenceError(undefined, {
+        typeConfidence: invoice.typeConfidence,
+      });
+      break;
+    case "POOR_IMAGE_QUALITY":
+      throw new PoorImageQualityError(undefined, {
+        typeConfidence: invoice.typeConfidence,
+      });
+      break;
+    case "NOT_AN_INVOICE":
+      throw new NotInvoiceError();
+      break;
+    case "MULTIPLE_INVOICES":
+      throw new MultipleInvoicesError(undefined, {
+        typeConfidence: invoice.typeConfidence,
+      });
+      break;
+    case "NONE":
+      if (invoice.imageType === "unknown") {
+        // 'unknown' and NONE shouldn't exist - miscategorized
+        throw new AppError(
+          `Data miscategorization`,
+          500,
+          "INTERNAL_ERROR",
+          {
+            details: {
+              imageType: invoice.imageType,
+              typeConfidence: invoice.typeConfidence,
+              errorCode: invoice.errorCode,
+              vendorConfidence: invoice.vendor.confidence,
+              invoiceConfidence: invoice.invoice.confidence,
+              customerConfidence: invoice.customer.confidence,
+              totalsConfidence: invoice.totals.confidence,
+            },
+          },
+        );
+      } else {
+        // Is invoice - check confidence level
+        if (invoice.typeConfidence < confidenceThreshold) {
+          throw new LowConfidenceError(undefined, {
+            details: {
+              confidenceThreshold: confidenceThreshold,
+              imageType: invoice.imageType,
+              typeConfidence: invoice.typeConfidence,
+              errorCode: invoice.errorCode,
+              vendorConfidence: invoice.vendor.confidence,
+              invoiceConfidence: invoice.invoice.confidence,
+              customerConfidence: invoice.customer.confidence,
+              totalsConfidence: invoice.totals.confidence,
+            }
+          });
+        }
+      }
+      break;
+    default:
+  }
 }
 
 function parseTextContent(content: Anthropic.Messages.ContentBlock[]): string {

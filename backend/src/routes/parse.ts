@@ -28,17 +28,17 @@ async function parseHandler(req: Request, res: Response, next: NextFunction) {
         extractLineItems: true,
         extractTax: true,
         validateTotals: true,
-        confidenceThreshold: 90,
+        confidenceThreshold: 0.9,
       },
     };
 
     const jsonData = await processFileUpload(parseData)
 
-    // res.json(jsonData); // Needs to be JS object, not JSON string
+    res.json(jsonData); // Needs to be JS object, not JSON string
     // Use below for direct JSON string output
-    res
-        .appendHeader('Content-Type', 'application/json')
-        .end(jsonData)
+    // res
+    //     .appendHeader('Content-Type', 'application/json')
+    //     .end(jsonData)
   }
 }
 

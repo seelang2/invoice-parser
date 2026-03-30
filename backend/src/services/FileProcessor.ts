@@ -1,11 +1,13 @@
 import fs from "node:fs/promises";
 import { extractDataFromImage } from "../services/VisionExtractor.js";
-import { checkSchema } from "../services/Validator.js";
+// import { checkSchema } from "../services/Validator.js";
 import util from "node:util";
-import type { MediaType, ParseData } from "../types/types.js";
+import type { JsonApiResponse, MediaType, ParseData } from "../types/types.js";
 import { NotFoundError, ServiceUnavailableError } from "../errors.js";
+import { validateJson } from "./Validator.js";
+import { checkMath } from "./MathValidator.js";
 
-export async function processFileUpload(parseData: ParseData): Promise<string> {
+export async function processFileUpload(parseData: ParseData): Promise<JsonApiResponse> {
   const {
     extractLineItems = true,
     extractTax = true,
@@ -14,26 +16,31 @@ export async function processFileUpload(parseData: ParseData): Promise<string> {
   } = parseData.options as any;
 
   // Check image and resize if necessary
-  
+
   const imageData = await getBase64File(parseData.file.path);
   if (!imageData) { throw new NotFoundError }
 
-  const response = await extractDataFromImage(imageData, parseData.file.mimetype as MediaType); // Error passed automatically
+  const invoice = await extractDataFromImage(imageData, parseData.file.mimetype as MediaType, confidenceThreshold); // Error passed automatically
 
   // This shouldn't run if the API throws an error, but it's a necessary guard rail for TS
-  if (!response) {
+  if (!invoice) {
     throw new ServiceUnavailableError();
   }
 
-  console.log('API Response:', response)
 
   // validate JSON
-
-  // checkSchema()
-
+  const jsonValidationResult = validateJson(invoice)
+  
   // validate math
+  const mathChecks = checkMath(invoice)
 
-  return response;
+  return {
+    success: true,
+    extractedData: invoice,
+    validation: {
+      mathChecks: mathChecks
+    }
+  };
 }
 
 async function getBase64File(path: string): Promise<string> {
@@ -44,3 +51,30 @@ async function getBase64File(path: string): Promise<string> {
         throw err
   }
 }
+
+/*
+{
+    "imageType": "unknown",
+    "typeConfidence": 0.98,
+    "errorCode": "NOT_AN_INVOICE",
+    "vendor": {
+        "name": "Unknown",
+        "address": null,
+        "phone": null,
+        "email": null,
+        "taxId": null,
+        "confidence": 0
+    },
+    "invoice": {
+        "number": "Unknown",
+        "date": "1970-01-01",
+        "dueDate": null,
+        "poNumber": null,
+        "confidence": 0
+    },
+    "totals": {
+        "total": 0,
+        "confidence": 0
+    }
+}
+*/

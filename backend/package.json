@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "description": "Web application that extracts structured data from invoice images/PDFs",
   "main": "index.js",
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "build": "npm run clean && tsc && npm run copy-static",
+    "build": "pnpm run clean && tsc && pnpm run copy-static",
     "clean": "shx rm -rf dist/",
     "copy-static": "shx cp -r src/public dist/",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -24,6 +25,7 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@types/express": "^5.0.6",
     "ajv": "^8.18.0",
+    "ajv-formats": "^3.0.1",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
