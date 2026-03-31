@@ -1,6 +1,3 @@
-
-
-
 /*
 Anthropic Error (JSON) message:
 {
@@ -19,20 +16,25 @@ Anthropic Error (JSON) message:
 */
 
 export interface AnthropicError extends Error {
-    status: number,
-    headers: Record<string, string>,
-    requestID: string,
+  status: number;
+  headers: Record<string, string>;
+  requestID: string;
+  error: {
+    type: string;
     error: {
-        type: string,
-        error: {
-            type: string,
-            message: string
-        },
-        request_id: string
-    }
+      type: string;
+      message: string;
+    };
+    request_id: string;
+  };
 }
 
-export type AnthropicRetryOptions = { maxRetries?: number, baseDelayMs?: number, maxDelayMs?: number, requestId?: number }
+export type AnthropicRetryOptions = {
+  maxRetries?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+  requestId?: number;
+};
 
 export type ParseData = {
   file: Express.Multer.File;
@@ -41,143 +43,163 @@ export type ParseData = {
     extractTax?: boolean;
     validateTotals?: boolean;
     confidenceThreshold?: number;
-  }
+  };
 };
 
-export type MediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp"
+export type MediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
 export type AppErrorOptions = {
-  isOperational?: boolean,
-  details?: unknown, 
-  cause?: unknown,
-  requestId?: unknown,
-  originalError?: unknown 
-}
+  isOperational?: boolean;
+  details?: unknown;
+  cause?: unknown;
+  requestId?: unknown;
+  originalError?: unknown;
+};
 
 type Vendor = {
-  name: string,
-  address?: string | null,
-  phone?: string | null,
-  email?: string | null,
-  taxId?: string | null,
-  confidence?: number
-}
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  taxId?: string | null;
+  confidence?: number;
+};
 
 type InvoiceInfo = {
-  number: string,
-  date: string,
-  dueDate?: string | null,
-  poNumber?: string | null,
-  confidence?: number
-}
+  number: string;
+  date: string;
+  dueDate?: string | null;
+  poNumber?: string | null;
+  confidence?: number;
+};
 
 type Customer = {
-  name: string,
-  address?: string | null,
-  phone?: string | null,
-  email?: string | null,
-  confidence?: number
-}
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  confidence?: number;
+};
 
 type LineItem = {
-  description: string,
-  quantity?: number | null,
-  unitPrice?: number | null,
-  amount: number,
-  confidence?: number
-}
+  description: string;
+  quantity?: number | null;
+  unitPrice?: number | null;
+  amount: number;
+  confidence?: number;
+};
 
 type Totals = {
-  subtotal?: number,
-  taxRate?: number | null,
-  taxAmount?: number | null,
-  total: number,
-  currency?: string,
-  confidence?: number
-}
+  subtotal?: number;
+  taxRate?: number | null;
+  taxAmount?: number | null;
+  total: number;
+  currency?: string;
+  confidence?: number;
+};
 
 export type Invoice = {
-  imageType: "invoice" | "unknown",
-  typeConfidence: number,
-  errorCode: "NONE" | "LOW_CONFIDENCE" | "POOR_IMAGE_QUALITY" | "NOT_AN_INVOICE" | "MULTIPLE_INVOICES",
-  vendor: Vendor,
-  invoice: InvoiceInfo,
-  customer: Customer,
-  lineItems?: LineItem[],
-  totals: Totals
-}
+  imageType: "invoice" | "unknown";
+  typeConfidence: number;
+  errorCode:
+    | "NONE"
+    | "LOW_CONFIDENCE"
+    | "POOR_IMAGE_QUALITY"
+    | "NOT_AN_INVOICE"
+    | "MULTIPLE_INVOICES";
+  vendor: Vendor;
+  invoice: InvoiceInfo;
+  customer: Customer;
+  lineItems?: LineItem[];
+  totals: Totals;
+};
 
 export type MathChecks = {
-  lineItemsMatchSubtotal: boolean,
-  expectedSubtotal: number,
-  extractedSubtotal: number,
-  difference: number
-}
+  lineItemsMatchSubtotal: boolean;
+  expectedSubtotal: number;
+  extractedSubtotal: number;
+  difference: number;
+};
 
 type ValidationErrors = {
-  instancePath: string,
-  schemaPath: string,
-  keyword: string,
-  params: Record<string, string>,
-  message: string
-}
+  instancePath: string;
+  schemaPath: string;
+  keyword: string;
+  params: Record<string, string>;
+  message: string;
+};
 
 export type ValidationResponse = {
-  success: boolean,
-  errors?: unknown[] | null | undefined
-}
+  success: boolean;
+  errors?: unknown[] | null | undefined;
+};
 
 export type JsonApiResponse = {
-  success: boolean,
-  extractedData: Invoice,
+  success: boolean;
+  extractedData: Invoice;
   validation: {
-    mathChecks: MathChecks,
-    warnings?: string[]
-  }
+    mathChecks: MathChecks;
+    warnings?: string[];
+  };
+};
+export interface ParserApiResponse {
+  success: boolean;
+  requestId: string;
+  // On success
+  extractedData?: Invoice;
+  validation?: {
+    mathChecks: MathChecks;
+    warnings?: string[];
+  };
+  // On error
+  error?: string;
+  message?: string;
+  details?: {
+    typeConfidence: number;
+    suggestions?: string[];
+  };
 }
-
 
 // Most of these types aren't really needed
 type Token = {
-  input: number
-  output: number
+  input: number;
+  output: number;
 };
 
 type Role = "user" | "assistant";
 
 type TextBlock = {
   type: "text";
-  content: string
+  content: string;
 };
 
 type ImageBlock = {
-  type: "image"
+  type: "image";
   source: {
-    type: string
-    media_type: MediaType
-    data: string
-  }
+    type: string;
+    media_type: MediaType;
+    data: string;
+  };
 };
 
 type Message = {
-  role: Role,
-  content: string | []
+  role: Role;
+  content: string | [];
 };
 
 interface UserMessage extends Message {
-  timestamp: string
+  timestamp: string;
 }
 
 interface ResponseMessage extends UserMessage {
-  tokens: Token
-  cost: number
+  tokens: Token;
+  cost: number;
 }
 
 interface ApiResponse {
-  id: string
+  id: string;
   usage: {
-    input_tokens: number
-    output_tokens: number
-  }
+    input_tokens: number;
+    output_tokens: number;
+  };
 }
-

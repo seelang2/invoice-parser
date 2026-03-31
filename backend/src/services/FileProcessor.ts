@@ -3,11 +3,17 @@ import { extractDataFromImage } from "../services/VisionExtractor.js";
 // import { checkSchema } from "../services/Validator.js";
 import util from "node:util";
 import type { JsonApiResponse, MediaType, ParseData } from "../types/types.js";
-import { NotFoundError, ServiceUnavailableError } from "../errors.js";
+import {
+  NotFoundError,
+  ServiceUnavailableError,
+  ValidationError,
+} from "../errors.js";
 import { validateJson } from "./Validator.js";
 import { checkMath } from "./MathValidator.js";
 
-export async function processFileUpload(parseData: ParseData): Promise<JsonApiResponse> {
+export async function processFileUpload(
+  parseData: ParseData,
+): Promise<JsonApiResponse> {
   const {
     extractLineItems = true,
     extractTax = true,
@@ -18,28 +24,39 @@ export async function processFileUpload(parseData: ParseData): Promise<JsonApiRe
   // Check image and resize if necessary
 
   const imageData = await getBase64File(parseData.file.path);
-  if (!imageData) { throw new NotFoundError }
+  if (!imageData) {
+    throw new NotFoundError();
+  }
 
-  const invoice = await extractDataFromImage(imageData, parseData.file.mimetype as MediaType, confidenceThreshold); // Error passed automatically
+  const invoice = await extractDataFromImage(
+    imageData,
+    parseData.file.mimetype as MediaType,
+    confidenceThreshold,
+  ); // Error passed automatically
 
   // This shouldn't run if the API throws an error, but it's a necessary guard rail for TS
   if (!invoice) {
     throw new ServiceUnavailableError();
   }
 
-
   // validate JSON
-  const jsonValidationResult = validateJson(invoice)
-  
+  const jsonValidationResult = validateJson(invoice);
+
+  if (!jsonValidationResult.success) {
+    throw new ValidationError("Extracted data failed validation", {
+      details: jsonValidationResult.errors,
+    });
+  }
+
   // validate math
-  const mathChecks = checkMath(invoice)
+  const mathChecks = checkMath(invoice);
 
   return {
     success: true,
     extractedData: invoice,
     validation: {
-      mathChecks: mathChecks
-    }
+      mathChecks: mathChecks,
+    },
   };
 }
 
@@ -48,7 +65,7 @@ async function getBase64File(path: string): Promise<string> {
     const rawFileData = await fs.readFile(path);
     return rawFileData.toString("base64");
   } catch (err) {
-        throw err
+    throw err;
   }
 }
 

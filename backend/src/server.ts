@@ -17,6 +17,9 @@ export const app: Application = express();
 app.use(helmet());
 app.use(cors()); // cors options: { origin: config.ALLOWED_ORIGINS }
 
+app.use(express.json()); // for parsing application/json
+app.use(express.urlencoded({ extended: true })); // for parsing application/x-www-form-urlencoded
+
 // Generate a request ID and attach to response.locals
 app.use((req, res, next) => {
   res.locals.requestId = randomBytes(32).toString("base64");

@@ -5,7 +5,7 @@ import path, { dirname } from "path";
 import { fileURLToPath } from "url";
 import { NotFoundError } from "../errors.js";
 import { processFileUpload } from "../services/FileProcessor.js";
-import type { ParseData } from "../types/types.js";
+import type { ParseData, ParserApiResponse } from "../types/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,6 +21,8 @@ async function parseHandler(req: Request, res: Response, next: NextFunction) {
     const error = new NotFoundError("uploaded file");
     next(error);
   } else {
+    console.log(req.body); // Log the parsed form fields to verify they are being received correctly
+
     // extract options from the frontend POST
     const parseData: ParseData = {
       file: req.file,
@@ -34,7 +36,12 @@ async function parseHandler(req: Request, res: Response, next: NextFunction) {
 
     const jsonData = await processFileUpload(parseData);
 
-    res.json(jsonData); // Needs to be JS object, not JSON string
+    res.json({
+      success: true,
+      requestId: res.locals.requestId,
+      extractedData: jsonData.extractedData,
+      validation: jsonData.validation,
+    } as ParserApiResponse); // Needs to be JS object, not JSON string
     // Use below for direct JSON string output
     // res
     //     .appendHeader('Content-Type', 'application/json')

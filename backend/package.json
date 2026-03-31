@@ -5,6 +5,7 @@
   "main": "index.js",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
+    "start": "node dist/index.js",
     "build": "pnpm run clean && tsc && pnpm run copy-static",
     "clean": "shx rm -rf dist/",
     "copy-static": "shx cp -r src/public dist/",
